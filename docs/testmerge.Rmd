@@ -1,0 +1,146 @@
+---
+title: "Experimental merge reads"
+author: "Rob Harbert"
+date: "6/21/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Merging paired end reads in R
+
+If there is an existing tool to merge paired end DNA sequence data in R I could not find it. 
+
+For a larger scale project I need to merge reads for amplicon sequencing data where the fragment length is known to be shorter than the two reads in each pair. Therefore, one of the first steps is to merge paired reads to get individual sequences for each read pair covering the full amplicon. 
+
+Here is a quick and dirty attempt at a paired end read merger written in R. It is not fast and does not currently resovle differences between forward and reverse sequences.
+
+# The function: mergeReads
+
+The approach was to try to quickly identify the read overlap position that had the greatest similarity between forward and reverse reads. To do this mergeReads:
+
++ Reverse complements the reverse read
++ Tests overlap positions from a minimum overlap of 10 (or user defined) for similarity based on Levenshtein's Distance
++ The local minimum of Levenshtein's distance is identified. This is the point where the read overlap should be the most similar. However, more than one position may be optimal. For now mergeReads just keeps the first position as optimum.
++ Last, mergeReads concatenates the forward read and the reverse read after the optimal overlap to create one merged read. Differences between forward and reverse sequences are not resolved yet.
+
+Look at <a href='../R/testmerge.R'> testmerge.R </a> for details.
+
+# Usage
+
+```{R}
+source('../R/testmerge.R')
+
+# declare path to paired end data
+path2R1 = 'test.R1.fastq'
+path2R2 =  'test.R2.fastq'
+
+
+#time test read merging for ~66 read pairs
+p = proc.time()
+mtest = mergeReads(path2R1, path2R2, minoverlap=20)
+proc.time() - p
+
+head(mtest)
+
+
+```
+
+# How does it work?
+
+Let's break down the mergeReads function.
+
+First we read in paired end data:
+
+```{R}
+  require(Biostrings, quietly=TRUE)
+  require(stringr, quietly=TRUE)
+  r1 = readQualityScaledDNAStringSet(path2R1)
+  r2 = readQualityScaledDNAStringSet(path2R2)
+  
+```
+
+Then we reverse complement the reverse read:
+
+```{R}
+ r2 = reverseComplement(r2)
+```
+
+Next, a loop through each read to evaluate pair overlap at each position starting from a user defined *minoverlap*.
+
+```{R}
+minoverlap=20
+reads = data.frame(
+    l1 = 1:length(r1),
+    l2 = 1:length(r2),
+    lm = 1:length(r1),
+    seq = 1:length(r1)
+  )
+  for (i in 1:length(r1)) {
+    dist=vector()
+    nr1 = nchar(r1[[i]])
+    nr2 = nchar(r2[[i]])
+    p=proc.time()
+    for(z in minoverlap:length(r1[[i]])){
+      forw = (str_sub(r1[[i]], -z))
+      reve = (str_sub(r2[[i]], 1, z))
+      dist[[z]] = adist(forw, reve)
+      currlen = nchar(dist[[z]])
+      if (z > 50){
+        if (dist[[z-30]] > dist[[z - 10]] && dist[[z]] > dist[[z-10]]) { break }
+      }
+      
+    }
+    minedit = which(dist == min(dist, na.rm=T))
+    for.unmatched = str_sub(r1[[i]], 1, nchar(r1[[i]]) - minedit)
+    for.matched = str_sub(r1[[i]], -minedit)
+    rev.matched = str_sub(r2[[i]], 1,minedit)
+    rev.unmatched = str_sub(r2[[i]], -(nchar(r2[[i]]) - minedit))
+    mcat = paste(for.unmatched, 
+                 for.matched, 
+                 rev.unmatched, sep='')
+    reads$l1[i] = nchar(r1[[i]])
+    reads$l2[i] = nchar(r2[[i]])
+    reads$lm[i] = nchar(mcat[1])
+    reads$seq[i] = mcat[1]
+  }
+
+```
+
+Looking closer, for any read, for example read #25, read overlap is tested for minimum Levensthein's Distance:
+
+```{R}
+  i = 25
+  minoverlap = 10
+  dist = vector()
+    for(z in minoverlap:length(r1[[i]])){
+      forw = (str_sub(r1[[i]], -z))
+      reve = (str_sub(r2[[i]], 1, z))
+      dist[[z]] = adist(forw, reve)
+      currlen = nchar(dist[[z]])
+      if (z > 50){
+        if (dist[[z-30]] > dist[[z - 10]] && dist[[z]] > dist[[z-10]]) { break }
+      }
+      
+    }
+    plot(dist)
+    plot(dist/1:length(dist))
+    minedit = which(dist == min(dist, na.rm=T))
+    print(minedit) #This is the point where the edit distance is smallest
+    for.unmatched = str_sub(r1[[i]], 1, nchar(r1[[i]]) - minedit)
+    for.matched = str_sub(r1[[i]], -minedit)
+    rev.matched = str_sub(r2[[i]], 1,minedit)
+    rev.unmatched = str_sub(r2[[i]], -(nchar(r2[[i]]) - minedit))
+    mcat = paste(for.unmatched, 
+                 for.matched, 
+                 rev.unmatched, sep='')
+    print(mcat)
+
+```
+
+# What's next?
+
+Hopefully someone can show me a better way to merge reads in pure R code. But if there s not another tool out there, then I will develop this to be a bit more full featured. mergeReads will be made to handle non-overlapping read pairs, resolve inconsistencies in forward and reverse sequence, and to explicitly evaluate alignment criteria.
+
