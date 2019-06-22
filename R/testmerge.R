@@ -1,5 +1,7 @@
 ## R function for merging paired end DNA sequence data when you *know* that all pairs should overlap. That is, when fragment length is smaller than 2x read length.
 
+
+# broken, proably won't fix
 mergeReads = function(R1, R2, minoverlap=10) {
   require(Biostrings, quietly=TRUE)
   require(stringr, quietly=TRUE)
