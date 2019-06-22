@@ -38,10 +38,10 @@ path2R1 = 'test.R1.fastq'
 path2R2 =  'test.R2.fastq'
 
 
-#time test read merging for ~66 read pairs
-p = proc.time()
+#time test read merging for ~65 read pairs
+
 mtest = mergeReads(path2R1, path2R2, minoverlap=20)
-proc.time() - p
+
 
 head(mtest)
 
@@ -68,6 +68,7 @@ Then we reverse complement the reverse read:
  r2 = reverseComplement(r2)
 ```
 
+
 Next, a loop through each read to evaluate pair overlap at each position starting from a user defined *minoverlap*.
 
 ```{R}
@@ -93,7 +94,7 @@ reads = data.frame(
       }
       
     }
-    minedit = which(dist == min(dist, na.rm=T))
+    minedit = which(dist/1:length(dist) == min(dist/1:length(dist), na.rm=T))
     for.unmatched = str_sub(r1[[i]], 1, nchar(r1[[i]]) - minedit)
     for.matched = str_sub(r1[[i]], -minedit)
     rev.matched = str_sub(r2[[i]], 1,minedit)
@@ -112,7 +113,7 @@ reads = data.frame(
 Looking closer, for any read, for example read #25, read overlap is tested for minimum Levensthein's Distance:
 
 ```{R}
-  i = 25
+  i = 88
   minoverlap = 10
   dist = vector()
     for(z in minoverlap:length(r1[[i]])){
@@ -125,9 +126,9 @@ Looking closer, for any read, for example read #25, read overlap is tested for m
       }
       
     }
-    plot(dist)
-    plot(dist/1:length(dist))
-    minedit = which(dist == min(dist, na.rm=T))
+    plot(dist, type = 'l')
+     plot(dist/1:length(dist), type = 'l')
+    minedit = which(dist/1:length(dist) == min(dist/1:length(dist), na.rm=T))
     print(minedit) #This is the point where the edit distance is smallest
     for.unmatched = str_sub(r1[[i]], 1, nchar(r1[[i]]) - minedit)
     for.matched = str_sub(r1[[i]], -minedit)
@@ -144,3 +145,19 @@ Looking closer, for any read, for example read #25, read overlap is tested for m
 
 Hopefully someone can show me a better way to merge reads in pure R code. But if there s not another tool out there, then I will develop this to be a bit more full featured. mergeReads will be made to handle non-overlapping read pairs, resolve inconsistencies in forward and reverse sequence, and to explicitly evaluate alignment criteria.
 
+
+# Dada2 to save it all
+
+```{R}
+library(dada2)
+#derepF = derepFastq(system.file("extdata", "sam1F.fastq.gz", package="dada2"))
+#derepR = derepFastq(system.file("extdata", "sam1R.fastq.gz", package="dada2"))
+derepF = derepFastq(path2R1)
+derepR = derepFastq(path2R2)
+dadaF <- dada(derepF, err=tperr1, errorEstimationFunction=loessErrfun, selfConsist=TRUE)
+dadaR <- dada(derepR, err=tperr1, errorEstimationFunction=loessErrfun, selfConsist=TRUE)
+merger <- mergePairs(dadaF, derepF, dadaR, derepR)
+merger <- mergePairs(dadaF, derepF, dadaR, derepR, returnRejects=TRUE, propagateCol=c("n0", "birth_ham"))
+merger <- mergePairs(dadaF, derepF, dadaR, derepR, justConcatenate=TRUE)
+
+```

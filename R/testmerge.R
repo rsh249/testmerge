@@ -27,12 +27,13 @@ mergeReads = function(R1, R2, minoverlap=10) {
       #if (currlen > maxlen) { maxlen = currlen }
       #if (currlen < maxlen && currlen < minsincemax) { minsincemax = currlen }
       if (z > 50){
-        if (dist[[z-30]] > dist[[z - 10]] && dist[[z]] > dist[[z-10]]) { break }
+        if (dist[[z-30]] > dist[[z - 10]] && dist[[z]] > dist[[z-10]]) { optimstatus = 1; break }
       }
       
     }
+    if (optimstatus == 0 ) { print("No overlap found"); next }
     
-    minedit = which(dist == min(dist, na.rm=T))
+    minedit = which(dist/1:length(dist) == min(dist/1:length(dist), na.rm=T))
     for.unmatched = str_sub(r1[[i]], 1, nchar(r1[[i]]) - minedit)
     for.matched = str_sub(r1[[i]], -minedit)
     rev.matched = str_sub(r2[[i]], 1,minedit)
